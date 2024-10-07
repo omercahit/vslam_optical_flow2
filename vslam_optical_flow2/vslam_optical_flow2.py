@@ -177,14 +177,15 @@ class CameraViewer(Node):
             broadcaster.sendTransform(tf_msg)
 
             self.prev_angle = angle
-        
-        cv2.imshow("Optical Flow Vectors", self.frame)
 
         self.prev_gray = gray
+
+        if self.params['show_flows']:
+            cv2.imshow("Optical Flow Vectors", self.frame)
         
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            cv2.destroyAllWindows()
-            rclpy.shutdown()
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                cv2.destroyAllWindows()
+                rclpy.shutdown()
 
 def main(args=None):
     rclpy.init(args=args)
