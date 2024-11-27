@@ -8,3 +8,4 @@ image_topic: '/intel_realsense_r200_depth/image_raw'
 #image_topic: '/camera/camera/color/image_raw'
 tf_frame_name: 'base_estimation'
 show_flows: True # Default is False
+fps: 15

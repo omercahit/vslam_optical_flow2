@@ -5,6 +5,7 @@ from cv_bridge import CvBridge
 import cv2
 import numpy as np
 from geometry_msgs.msg import TransformStamped, PoseWithCovarianceStamped
+from nav_msgs.msg import Odometry
 from tf2_ros import TransformBroadcaster
 import os
 import yaml
@@ -31,6 +32,7 @@ class CameraViewer(Node):
         self.feature_params = dict(maxCorners=100, qualityLevel=0.3, minDistance=7, blockSize=7)
         self.quat = [0,0,0,1]
         self.loc = []
+        self.fps = self.params['fps']
 
         if isinstance(self.params['initial_pose'], str):
             self.inital_pose_sub = self.create_subscription(
@@ -121,18 +123,20 @@ class CameraViewer(Node):
     def listener_callback(self, msg):
         if self.frame is None:
             self.frame = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-            self.frame = self.frame[60:660, 340:940]
+            #self.frame = self.frame[60:660, 340:940]
+            self.frame = self.frame[:, 80:560]
             self.prev_gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
             return
         
         self.frame = self.bridge.imgmsg_to_cv2(msg, "bgr8")
-        self.frame = self.frame[60:660, 340:940]
+        #self.frame = self.frame[60:660, 340:940]
+        self.frame = self.frame[:, 80:560]
 
         gamma = np.log(np.mean(self.frame))/np.log(128)
 
-        self.frame = self.adjust_gamma(self.frame, gamma)
+        #self.frame = self.adjust_gamma(self.frame, gamma)
 
-        lk_params = dict(winSize=(60, 60), maxLevel=2,
+        lk_params = dict(winSize=(120, 120), maxLevel=2,
         criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
                    
         gray = cv2.cvtColor(self.frame, cv2.COLOR_BGR2GRAY)
@@ -166,6 +170,7 @@ class CameraViewer(Node):
 
             if np.isnan(temp_d1) or np.isnan(temp_d2):
                 print("NaN value occured. Skipping...")
+                self.frame = None
                 return
 
             H, mask = cv2.findHomography(self.good_old, self.good_new, cv2.RANSAC, 5.0)
@@ -179,9 +184,11 @@ class CameraViewer(Node):
             temp_d1, temp_d2, _ = np.dot(R,V)
         except:
             print("Not enough points to calculate angle")
+            self.frame = None
+            return
 
         
-        self.loc[0] = self.loc[0] + temp_d1
+        self.loc[0] = self.loc[0] - temp_d1 # direction of y axis is reverse
         self.loc[1] = self.loc[1] + temp_d2
 
 
@@ -192,7 +199,8 @@ class CameraViewer(Node):
         tf_msg = TransformStamped()
         tf_msg.header.stamp = self.get_clock().now().to_msg()
         tf_msg.header.frame_id = "map"
-        tf_msg.child_frame_id = self.params['tf_frame_name']
+        #tf_msg.child_frame_id = self.params['tf_frame_name']
+        tf_msg.child_frame_id = "odom_cam"
         tf_msg.transform.translation.x = self.loc[1] 
         tf_msg.transform.translation.y = self.loc[0] 
         tf_msg.transform.translation.z = 0 + 0.1
@@ -202,8 +210,30 @@ class CameraViewer(Node):
         tf_msg.transform.rotation.w = float(self.quat[3])
 
         broadcaster.sendTransform(tf_msg)
+
+        self.odom_pub = self.create_publisher(Odometry, '/odom_cam', 10)
+
+        odom_msg = Odometry()
+        odom_msg.header.stamp = self.get_clock().now().to_msg()
+        odom_msg.header.frame_id = "map"
+        odom_msg.child_frame_id = "odom_cam"
+        odom_msg.pose.pose.position.x = self.loc[1] 
+        odom_msg.pose.pose.position.y = self.loc[0] 
+        odom_msg.pose.pose.position.z = 0 + 0.1
+        odom_msg.pose.pose.orientation.x = float(self.quat[0])
+        odom_msg.pose.pose.orientation.y = float(self.quat[1])
+        odom_msg.pose.pose.orientation.z = float(self.quat[2])
+        odom_msg.pose.pose.orientation.w = float(self.quat[3])
+        odom_msg.twist.twist.linear.x = temp_d1*self.fps
+        odom_msg.twist.twist.linear.y = temp_d2*self.fps
+        odom_msg.twist.twist.linear.z = 0.0
+        odom_msg.twist.twist.angular.x = 0.0
+        odom_msg.twist.twist.angular.y = 0.0
+        odom_msg.twist.twist.angular.z = theta*self.fps
+
+        self.odom_pub.publish(odom_msg)
         
-        cv2.imshow("Optical Flow Vectors", self.frame)
+        #cv2.imshow("Optical Flow Vectors", self.frame)
 
         self.prev_gray = gray
         
