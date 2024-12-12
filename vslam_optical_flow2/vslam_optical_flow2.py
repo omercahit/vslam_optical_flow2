@@ -132,7 +132,7 @@ class CameraViewer(Node):
         #self.frame = self.frame[60:660, 340:940]
         self.frame = self.frame[:, 80:560]
 
-        gamma = np.log(np.mean(self.frame))/np.log(128)
+        #gamma = np.log(np.mean(self.frame))/np.log(128)
 
         #self.frame = self.adjust_gamma(self.frame, gamma)
 
@@ -150,6 +150,7 @@ class CameraViewer(Node):
 
             temp_d1s = []
             temp_d2s = []
+
             for i, (new, old) in enumerate(zip(self.good_new, self.good_old)):
                 a, b = new.ravel()
                 c, d = old.ravel()
@@ -157,13 +158,17 @@ class CameraViewer(Node):
                 temp_d1s.append(a - c)
                 temp_d2s.append(b - d)
 
-                if 0 > a > 600 or 0 > b > 600 or 0 > c > 600 or 0 > d > 600:
+                size = self.frame.shape[0]
+
+                if 0 > a > size or 0 > b > size or 0 > c > size or 0 > d > size:
                     return
 
-                self.frame = cv2.arrowedLine(self.frame, (int(c), int(d)), (int(a), int(b)),
-                (0, 255, 0), 2)
+                #self.frame = cv2.arrowedLine(self.frame, (int(c), int(d)), (int(a), int(b)),
+                #(0, 255, 0), 2)
 
-                self.frame = cv2.circle(self.frame, (int(a), int(b)), 5, (0, 0, 255), -1)
+                #self.frame = cv2.circle(self.frame, (int(a), int(b)), 5, (0, 0, 255), -1)
+
+                #cv2.imshow("Optical Flow Vectors", self.frame)
 
             temp_d1 = np.median(np.array(temp_d1s)) * self.params['calibration_multiplier']
             temp_d2 = np.median(np.array(temp_d2s)) * self.params['calibration_multiplier']
@@ -177,7 +182,7 @@ class CameraViewer(Node):
             theta = np.arctan2(H[1, 0], H[0, 0])
             #print(H[1, 0], H[0, 0])
             self.loc[2] = self.loc[2] + theta
-            print(f"Açısal değişim: {np.degrees(self.loc[2])} derece")
+            print(f"Açısal değişim: {np.degrees(theta)} derece")
 
             R = self.create_rotation_matrix(self.loc[2])
             V = [temp_d1, temp_d2, 0]
@@ -232,8 +237,6 @@ class CameraViewer(Node):
         odom_msg.twist.twist.angular.z = theta*self.fps
 
         self.odom_pub.publish(odom_msg)
-        
-        #cv2.imshow("Optical Flow Vectors", self.frame)
 
         self.prev_gray = gray
         
